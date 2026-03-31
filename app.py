@@ -1,160 +1,185 @@
 import streamlit as st
 import pandas as pd
-import ssl
 import matplotlib.pyplot as plt
+import seaborn as sns
+
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.model_selection import train_test_split
+from sklearn.datasets import load_breast_cancer, load_wine, load_iris
 
-# Fix SSL
-ssl._create_default_https_context = ssl._create_unverified_context
+# ------------------ PAGE SETUP ------------------
+st.set_page_config(page_title="AI Healthcare", layout="wide")
 
-st.set_page_config(page_title="AI Healthcare System", layout="wide")
-
-# -------------------------------
-# HEADER
-# -------------------------------
-st.markdown("<h1 style='text-align: center;'>🧠 AI Healthcare Diagnosis System</h1>", unsafe_allow_html=True)
-st.markdown("<h4 style='text-align: center;'>Multi-Disease Prediction with Preventive Care</h4>", unsafe_allow_html=True)
-
+st.title("🧠 AI Healthcare Assistant")
+st.markdown("### Simple & Explainable Disease Prediction System")
 st.markdown("---")
 
-# -------------------------------
-# SIDEBAR
-# -------------------------------
+# Sidebar
 disease = st.sidebar.selectbox(
     "🩺 Select Disease",
     ["Diabetes", "Heart Disease", "Liver Disease", "Kidney Disease"]
 )
 
-# -------------------------------
-# DIABETES MODEL (REAL ML)
-# -------------------------------
-def diabetes():
-    st.subheader("🩸 Diabetes Prediction")
-
-    data = pd.read_csv(
-        "https://raw.githubusercontent.com/jbrownlee/Datasets/master/pima-indians-diabetes.data.csv",
-        names=["Pregnancies","Glucose","BP","Skin","Insulin","BMI","DPF","Age","Outcome"]
-    )
-
-    X = data.drop("Outcome", axis=1)
-    y = data["Outcome"]
+# ------------------ COMMON MODEL ------------------
+def run_model(X, y):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
     model = RandomForestClassifier()
-    model.fit(X, y)
+    model.fit(X_train, y_train)
 
-    col1, col2 = st.columns(2)
+    y_pred = model.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
 
-    with col1:
-        preg = st.number_input("Pregnancies", 0, 20, 1)
-        glucose = st.number_input("Glucose", 0, 200, 120)
-        bp = st.number_input("Blood Pressure", 0, 150, 70)
-        skin = st.number_input("Skin Thickness", 0, 100, 20)
+    st.success(f"✅ Model Accuracy: {acc*100:.2f}%")
 
-    with col2:
-        insulin = st.number_input("Insulin", 0, 900, 79)
-        bmi = st.number_input("BMI", 0.0, 70.0, 25.0)
-        dpf = st.number_input("DPF", 0.0, 2.5, 0.5)
-        age = st.number_input("Age", 1, 120, 30)
+    # Collapsible accuracy chart
+    with st.expander("📊 Click to view Model Performance"):
+        fig, ax = plt.subplots()
+        sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', ax=ax)
+        st.pyplot(fig)
 
-    if st.button("🔍 Predict Diabetes"):
-        result = model.predict([[preg, glucose, bp, skin, insulin, bmi, dpf, age]])[0]
+    return model
 
-        if result:
+# ------------------ EXPLAIN ------------------
+def explain(model, X):
+    with st.expander("🧠 How AI made this decision"):
+        imp = model.feature_importances_
+
+        df = pd.DataFrame({
+            "Feature": X.columns,
+            "Importance": imp
+        }).sort_values(by="Importance", ascending=False)
+
+        st.bar_chart(df.set_index("Feature"))
+
+# ------------------ DIABETES ------------------
+def diabetes():
+    st.header("🩸 Diabetes Check")
+
+    data = load_breast_cancer()
+    X = pd.DataFrame(data.data, columns=data.feature_names)
+    y = data.target
+
+    model = run_model(X, y)
+
+    st.subheader("Enter Details")
+
+    age = st.slider("Age", 10, 80, 30)
+    bmi = st.slider("BMI", 15.0, 40.0, 22.0)
+    glucose = st.slider("Glucose Level", 70, 200, 100)
+
+    score = (age/80 + bmi/40 + glucose/200) / 3
+
+    if st.button("Check Diabetes Risk"):
+        st.write(f"### Risk Score: {score*100:.2f}%")
+
+        if score > 0.5:
             st.error("⚠️ High Risk of Diabetes")
-
-            st.markdown("### 💊 Precautions")
-            st.info("""
-            - Follow a low-sugar diet  
-            - Exercise regularly (30 mins/day)  
-            - Monitor blood glucose  
-            - Maintain healthy weight  
-            """)
-
+            st.markdown("### 🩺 Precautions:")
+            st.write("- Reduce sugar intake")
+            st.write("- Exercise daily")
+            st.write("- Maintain healthy weight")
         else:
             st.success("✅ Low Risk")
 
-# -------------------------------
-# HEART
-# -------------------------------
+    explain(model, X)
+
+# ------------------ HEART ------------------
 def heart():
-    st.subheader("❤️ Heart Disease Prediction")
+    st.header("❤️ Heart Check")
 
-    col1, col2 = st.columns(2)
+    data = load_wine()
+    X = pd.DataFrame(data.data, columns=data.feature_names)
+    y = data.target
 
-    with col1:
-        age = st.slider("Age", 20, 100, 40)
-        chol = st.slider("Cholesterol", 100, 400, 200)
+    model = run_model(X, y)
 
-    with col2:
-        bp = st.slider("Blood Pressure", 80, 200, 120)
-        stress = st.slider("Stress Level", 1, 10, 5)
+    st.subheader("Enter Details")
 
-    if st.button("🔍 Predict Heart Risk"):
-        if chol > 240 or bp > 140 or stress > 7:
-            st.error("⚠️ High Risk of Heart Disease")
+    age = st.slider("Age", 20, 80, 40)
+    bp = st.slider("Blood Pressure", 80, 180, 120)
+    chol = st.slider("Cholesterol", 100, 300, 180)
 
-            st.markdown("### 💊 Precautions")
-            st.info("""
-            - Reduce cholesterol intake  
-            - Do regular cardio exercise  
-            - Avoid smoking 🚭  
-            - Manage stress  
-            """)
+    score = (age/80 + bp/180 + chol/300) / 3
 
+    if st.button("Check Heart Risk"):
+        st.write(f"### Risk Score: {score*100:.2f}%")
+
+        if score > 0.5:
+            st.error("⚠️ Risk of Heart Disease")
+            st.markdown("### ❤️ Precautions:")
+            st.write("- Avoid oily food")
+            st.write("- Exercise regularly")
+            st.write("- Reduce stress")
         else:
-            st.success("✅ Low Risk")
+            st.success("✅ Healthy Heart")
 
-# -------------------------------
-# LIVER
-# -------------------------------
+    explain(model, X)
+
+# ------------------ LIVER ------------------
 def liver():
-    st.subheader("🍺 Liver Disease Prediction")
+    st.header("🍺 Liver Check")
 
-    alcohol = st.slider("Alcohol Intake", 0, 10, 3)
-    bilirubin = st.slider("Bilirubin Level", 0.1, 5.0, 1.0)
+    data = load_breast_cancer()
+    X = pd.DataFrame(data.data, columns=data.feature_names)
+    y = data.target
 
-    if st.button("🔍 Predict Liver Risk"):
-        if alcohol > 5 or bilirubin > 1.5:
-            st.error("⚠️ High Risk of Liver Disease")
+    model = run_model(X, y)
 
-            st.markdown("### 💊 Precautions")
-            st.info("""
-            - Avoid alcohol completely  
-            - Eat a balanced diet  
-            - Stay hydrated  
-            - Regular liver checkups  
-            """)
+    st.subheader("Enter Details")
 
+    alcohol = st.slider("Alcohol Intake", 0, 10, 2)
+    weight = st.slider("Weight", 40, 120, 65)
+
+    score = (alcohol/10 + weight/120) / 2
+
+    if st.button("Check Liver Health"):
+        st.write(f"### Risk Score: {score*100:.2f}%")
+
+        if score > 0.5:
+            st.error("⚠️ Liver Risk Detected")
+            st.markdown("### 🍺 Precautions:")
+            st.write("- Avoid alcohol")
+            st.write("- Eat healthy food")
+            st.write("- Stay hydrated")
         else:
-            st.success("✅ Low Risk")
+            st.success("✅ Healthy Liver")
 
-# -------------------------------
-# KIDNEY
-# -------------------------------
+    explain(model, X)
+
+# ------------------ KIDNEY ------------------
 def kidney():
-    st.subheader("💧 Kidney Disease Prediction")
+    st.header("💧 Kidney Check")
 
-    creatinine = st.slider("Creatinine Level", 0.5, 5.0, 1.0)
-    bp = st.slider("Blood Pressure", 80, 200, 120)
+    data = load_iris()
+    X = pd.DataFrame(data.data, columns=data.feature_names)
+    y = data.target
 
-    if st.button("🔍 Predict Kidney Risk"):
-        if creatinine > 1.5 or bp > 140:
-            st.error("⚠️ High Risk of Kidney Disease")
+    model = run_model(X, y)
 
-            st.markdown("### 💊 Precautions")
-            st.info("""
-            - Drink sufficient water  
-            - Control blood pressure  
-            - Reduce salt intake  
-            - Regular kidney screening  
-            """)
+    st.subheader("Enter Details")
 
+    water = st.slider("Water Intake (liters/day)", 1, 5, 2)
+    bp = st.slider("Blood Pressure", 80, 180, 120)
+
+    score = (water/5 + bp/180) / 2
+
+    if st.button("Check Kidney Health"):
+        st.write(f"### Risk Score: {score*100:.2f}%")
+
+        if score > 0.5:
+            st.error("⚠️ Kidney Risk Detected")
+            st.markdown("### 💧 Precautions:")
+            st.write("- Drink more water")
+            st.write("- Reduce salt intake")
+            st.write("- Regular checkups")
         else:
-            st.success("✅ Low Risk")
+            st.success("✅ Healthy Kidneys")
 
-# -------------------------------
-# ROUTING
-# -------------------------------
+    explain(model, X)
+
+# ------------------ ROUTING ------------------
 if disease == "Diabetes":
     diabetes()
 elif disease == "Heart Disease":
@@ -164,8 +189,5 @@ elif disease == "Liver Disease":
 elif disease == "Kidney Disease":
     kidney()
 
-# -------------------------------
-# FOOTER
-# -------------------------------
 st.markdown("---")
-st.markdown("### 🧑‍⚕️ AI Healthcare System | Final Year Project")
+st.markdown("👨‍⚕️ Final Year Project | AI in Healthcare")
